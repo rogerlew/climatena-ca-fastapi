@@ -20,7 +20,7 @@ Provides self-hosted web api for [ClimateNA.ca](https://climatena.ca)  scale-fre
 JWT_SECRET=
 ROOT_JWT=
 WC_TOKEN=
-API_BASE=https://climate-ca.bearhive.duckdns.org
+API_BASE=https://climatena-ca.bearhive.duckdns.org
 ```
 
 
