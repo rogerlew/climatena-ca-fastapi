@@ -1,12 +1,17 @@
-# installation
+# climatena-ca-fastapi
 
-1. download climateNA 7.50 and climateBC 7.50
+Provides self-hosted web api for [ClimateNA.ca](https://climatena.ca)  scale-free climate models.
 
-2. extract to C:\ and normalize directory names to:
+
+# Installation
+
+1. Download climateNA 7.50 and climateBC 7.50
+
+2. Extract to C:\ and normalize directory names to:
    - C:\ClimateNA_v7.50
    - C:\ClimateBC_v7.50
 
-3. clone `rogerlew/cliamtena-bc-fastapi` in `C:\ClimateNA_v7.50`
+3. Clone `rogerlew/cliamtena-bc-fastapi` in `C:\ClimateNA_v7.50`
 
 4. Test in VS Code and generate `api/.env` file
 
@@ -19,8 +24,9 @@ API_BASE=https://climate-ca.bearhive.duckdns.org
 ```
 
 
-# installing as a service
-### in admin cmd
+# Installing as a service
+
+### In admin cmd
 
 ```
 (climateBC-NA) C:\ClimateNA_v7.50\api>python climate_ca_api_service.py install
