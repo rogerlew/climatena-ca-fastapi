@@ -20,6 +20,9 @@ from typing import Optional
 import jwt
 import dotenv
 
+import logging
+log = logging.getLogger("perf")   
+
 dotenv.load_dotenv(override=True)
 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
@@ -60,29 +63,10 @@ security = HTTPBearer()   # parses Authorization: Bearer <token>
 # in‐memory revoked‐JTIs (persist to file/Redis if you like)
 REVOKED: set[str] = set()
 
-# allow up to X concurrent requests (tune as needed, e.g. num_workers * 100)
-max_concurrent = 5
-_semaphore = asyncio.Semaphore(max_concurrent)
-
-@app.middleware("http")
-async def limit_concurrency(request: Request, call_next):
-    if not _semaphore.locked():
-        await _semaphore.acquire()
-        try:
-            return await call_next(request)
-        finally:
-            _semaphore.release()
-    else:
-        # signal busy
-        return PlainTextResponse("Server busy", status_code=503)
-
 @app.get("/health")
 async def health():
-    # simple health: return 200 if under load, 503 if overloaded
-    if _semaphore._value > 0:
-        return {"status": "ok"}
-    raise HTTPException(503, "Server busy")
-
+    return {"status": "ok"}
+    
 # ── HELPERS ──────────────────────────────────────────────────────────────────
 def decode_jwt(token: str) -> dict:
     try:
@@ -178,16 +162,19 @@ async def run_climatena(
     work_dir = _join(query_root, run_id)
     os.makedirs(work_dir)
 
-    print(f'workdir: {work_dir}')
 
     assert os.path.exists(work_dir)
 
+    t0 = time.perf_counter()                 # ── probe 0
+
     inp = _join(work_dir, "input.csv")
+    i = 0
     with open(inp, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["id1","id2","lat","long","elev"])
         for loc in q.locations:
             w.writerow([loc.id1, loc.id2, loc.lat, loc.long, loc.elev])
+            i += 1
 
     out = _join(work_dir, "out.csv")
 
@@ -200,42 +187,51 @@ async def run_climatena(
         f"/{q.normal}",
         f"/{inp}",
         f"/{out}",
+        "/V",       
     ]
-
-    print(f'cmd: {cmd}')
-
+    
     timeout = 10.0 + len(q.locations) * 0.1
 
+    # ── run ClimateNA -----------------------------------------------------------
+    t1 = time.perf_counter()                 # before launch
+
+    # ─── override env so ClimateNA uses our fast temp folder ─────────────────
+    env = os.environ.copy()
+    fast_temp = r"C:\ClimateNA_v7.50\api\temp"
+    env["TEMP"]          = fast_temp
+    env["TMP"]           = fast_temp
+    env["LOCALAPPDATA"]  = fast_temp
+    os.environ["SESSIONNAME"] = "Console"  # Mimic console environment
+    # ─────────────────────────────────────────────────────────────────────────────
     result = subprocess.run(
         cmd,
         cwd=str(base_dir),
-        capture_output=True,
-        text=True,
+        env=env,                          # <-- use our env
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         timeout=timeout,
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
-    print(f'result: {result}')
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(base_dir),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        print(f'result: {result}')
-        result.check_returncode()  # raises CalledProcessError if exit ≠ 0
-    except:
-        raise HTTPException(500, detail=f'Error running {exe_name}. ')
+    t2 = time.perf_counter()                 # after ClimateNA exits
+    result.check_returncode()
+    # ---------------------------------------------------------------------------
+
+    # ── read the CSV (for FileResponse with stat_result we touch the file anyway)
+    csv_path = _join(base_dir, out)
+    _     = os.stat(csv_path)                # warm cache
+    t3 = time.perf_counter()                 # after stat
+
+    log.info("perf  create_csv  %.3f s", t2 - t1)   # EXE runtime
+    log.info("perf  stat_csv    %.3f s", t3 - t2)   # filesystem / AV hit
+    log.info("perf  total route %.3f s", t3 - t0)
 
     # 5) return the CSV for download
     return FileResponse(
-        path=str(_join(base_dir, out)),
+        path=_join(base_dir, out),
         filename=f"{run_id}_out.csv",
         media_type="text/csv",
+        stat_result=os.stat(_join(base_dir, out)),  # forces blocking sendfile()
     )
-
 
 if __name__ == "__main__":
     import uvicorn

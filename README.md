@@ -27,14 +27,17 @@ API_BASE=https://climatena-ca.bearhive.duckdns.org
 # Installing as a service
 
 ### In admin cmd
+```
+(climateBC-NA) C:\ClimateNA_v7.50\api>python climate_ca_api_service.py  --startup auto start install
+```
+
+### start (7x slower than debug)
 
 ```
-(climateBC-NA) C:\ClimateNA_v7.50\api>python climate_ca_api_service.py install
-Installing service Climate_ca_API
-Service installed
+(climateBC-NA) C:\ClimateNA_v7.50\api>python climate_ca_api_service.py  start
+```
 
-(climateBC-NA) C:\ClimateNA_v7.50\api>python climate_ca_api_service.py  --startup auto start
-Starting service Climate_ca_API
-
-(climateBC-NA) C:\ClimateNA_v7.50\api>
+### debug
+```
+(climateBC-NA) C:\ClimateNA_v7.50\api>python climate_ca_api_service.py  debug
 ```
